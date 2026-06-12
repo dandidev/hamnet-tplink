@@ -1,7 +1,7 @@
 OPENWRT_DIR  := $(CURDIR)/openwrt
+# Set this to your local download cache directory
 CACHE_DIR    := /opt/ham/htchat/cache/dl
 PATCHES_DIR  := $(CURDIR)/patches
-
 OPENWRT_TAG := v19.07.10
 CONFIG_SEED := $(CURDIR)/openwrt.config
 
