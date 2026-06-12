@@ -2,8 +2,10 @@ OPENWRT_DIR  := $(CURDIR)/openwrt
 # Set this to your local download cache directory
 CACHE_DIR    := /opt/ham/htchat/cache/dl
 PATCHES_DIR  := $(CURDIR)/patches
-OPENWRT_TAG := v19.07.10
-CONFIG_SEED := $(CURDIR)/openwrt.config
+OPENWRT_TAG  := v19.07.10
+#PROFILE      := tplink_tl-wr841-v11
+#PROFILE      := tplink_tl-wr841-v7
+CONFIG_SEED  := $(CURDIR)/openwrt-$(PROFILE).config
 
 .PHONY: image build setup patch config clean
 
