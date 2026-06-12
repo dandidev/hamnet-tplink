@@ -75,59 +75,45 @@ cp patches/003-chantable-hamnet.patch \
 
 ---
 
-## 004 - ath9k hw.h (NUM_CHANNELS)
-
-```sh
-# Location
-openwrt/build_dir/target-mips_24kc_musl/linux-ath79_tiny/backports-4.19.237-1/drivers/net/wireless/ath/ath9k/hw.h
-
-# Copy
-cp openwrt/build_dir/target-mips_24kc_musl/linux-ath79_tiny/backports-4.19.237-1/drivers/net/wireless/ath/ath9k/hw.h /tmp/hw.h.orig
-cp /tmp/hw.h.orig /tmp/hw.h
-
-# Edit
-vim /tmp/hw.h
-
-# Patch gen
-diff -u /tmp/hw.h.orig /tmp/hw.h > patches/004-numchannels-hamnet.patch
-sed -i 's|/tmp/hw.h.orig|a/drivers/net/wireless/ath/ath9k/hw.h|' patches/004-numchannels-hamnet.patch
-sed -i 's|/tmp/hw.h|b/drivers/net/wireless/ath/ath9k/hw.h|' patches/004-numchannels-hamnet.patch
-
-# Copy into OpenWrt
-cp patches/004-numchannels-hamnet.patch \
-    openwrt/package/kernel/mac80211/patches/ath/996-ath-hamnet-numchannels.patch
-```
-
----
-
 ## 005 - mac80211 Makefile (channel context)
- 
-Ez a patch a `mac80211` csomag Makefile-ját módosítja — nem kernel forrásfájl, hanem az OpenWrt build rendszer fájlja. Ezért `patch -d` paranccsal kell alkalmazni, nem a `patches/ath/` mappába másolni.
- 
+
+This patch modifies the `mac80211` package Makefile, not a kernel source file.
+It is applied via `patch -d` in the Makefile patch target, not copied into `patches/ath/`.
+
 ```sh
 # Location
 openwrt/package/kernel/mac80211/Makefile
- 
+
 # Copy
 cp openwrt/package/kernel/mac80211/Makefile /tmp/mac80211.orig
 cp /tmp/mac80211.orig /tmp/mac80211
- 
+
 # Edit - ATH9K_CHANNEL_CONTEXT append to config-y list
 vim /tmp/mac80211
- 
+
 # Patch gen
 diff -u /tmp/mac80211.orig /tmp/mac80211 > patches/005-channel-context.patch
 sed -i 's|/tmp/mac80211.orig|a/package/kernel/mac80211/Makefile|' patches/005-channel-context.patch
 sed -i 's|/tmp/mac80211|b/package/kernel/mac80211/Makefile|' patches/005-channel-context.patch
- 
+
 # Apply (in Makefile patch target)
 patch -d $(OPENWRT_DIR) -p1 -N --forward < patches/005-channel-context.patch || true
 ```
 
+---
+
 ## Build
 
 ```sh
+# Full rebuild (forces re-patch of both sources)
 rm -rf openwrt/build_dir/target-mips_24kc_musl/linux-ath79_tiny/backports-4.19.237-1/.prepared*
 rm -rf openwrt/build_dir/target-mips_24kc_musl/wireless-regdb-2021.08.28/.prepared*
+make build
+```
+
+```sh
+# Rebuild mac80211 only after editing a patch (faster than full rebuild).
+# clean wipes the build_dir so the next build re-extracts and re-patches.
+make package/kernel/mac80211/clean V=s
 make build
 ```
