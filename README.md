@@ -20,10 +20,10 @@ Custom OpenWrt 22.03.7 firmware that unlocks the 2300–2400 MHz HAMNET (13cm am
 
 ## What the patches do
 
-Four patches are applied to the OpenWrt source tree at build time:
+Five patches are applied to the OpenWrt source tree at build time:
 
 **001 — wireless-regdb db.txt**
-Adds `(2300 - 2400 @ 20), (20), NO-IR` to the `country 00` world regulatory domain in the wireless regulatory database.
+Adds `(2300 - 2400 @ 20), (20)` to the `country 00` world regulatory domain. TX is allowed (no NO-IR flag).
 
 **002 — ath/regd.c**
 Forces the ath driver to use the `WOR0_WORLD` (0x60) regulatory domain when the EEPROM contains the default country code. Also adds the `ATH9K_2GHZ_HAMNET` macro covering 2300–2400 MHz and inserts it into `ATH9K_2GHZ_ALL`. Modifies `ath_regd_init_wiphy` so that world regulatory domains pass through to `wiphy_apply_custom_regulatory`, enabling the HAMNET channel set to be applied to the radio.
@@ -32,7 +32,10 @@ Forces the ath driver to use the `WOR0_WORLD` (0x60) regulatory domain when the 
 Extends `ath9k_2ghz_chantable[]` with 20 HAMNET channels (2312–2407 MHz in 5 MHz steps) prepended before the standard 2412–2484 MHz channels.
 
 **004 — ath9k/hw.h**
-Updates `ATH9K_NUM_CHANNELS` to match the expanded channel table (original 38, new value depends on total channels added).
+Updates `ATH9K_NUM_CHANNELS` to match the expanded channel table.
+
+**005 — package/kernel/mac80211/Makefile**
+Adds `ATH9K_CHANNEL_CONTEXT` to the `config-y` list, enabling 5 MHz channel width support in the ath9k driver. Applied via `patch -d` rather than copied into the kernel patch directory.
 
 ---
 

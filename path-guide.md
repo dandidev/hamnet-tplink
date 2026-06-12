@@ -100,20 +100,28 @@ cp patches/004-numchannels-hamnet.patch \
 
 ---
 
-## Makefile patch target
-
-```makefile
-patch:
-	@echo "Applying HAMNET patches..."
-	@cp $(PATCHES_DIR)/001-db-hamnet.patch \
-		$(OPENWRT_DIR)/package/firmware/wireless-regdb/patches/001-db-hamnet.patch
-	@cp $(PATCHES_DIR)/002-regd-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/999-ath-hamnet-regd.patch
-	@cp $(PATCHES_DIR)/003-chantable-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/997-ath-hamnet-chantable.patch
-	@cp $(PATCHES_DIR)/004-numchannels-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/996-ath-hamnet-numchannels.patch
-	@echo "Done!"
+## 005 - mac80211 Makefile (channel context)
+ 
+Ez a patch a `mac80211` csomag Makefile-ját módosítja — nem kernel forrásfájl, hanem az OpenWrt build rendszer fájlja. Ezért `patch -d` paranccsal kell alkalmazni, nem a `patches/ath/` mappába másolni.
+ 
+```sh
+# Location
+openwrt/package/kernel/mac80211/Makefile
+ 
+# Copy
+cp openwrt/package/kernel/mac80211/Makefile /tmp/mac80211.orig
+cp /tmp/mac80211.orig /tmp/mac80211
+ 
+# Edit - ATH9K_CHANNEL_CONTEXT append to config-y list
+vim /tmp/mac80211
+ 
+# Patch gen
+diff -u /tmp/mac80211.orig /tmp/mac80211 > patches/005-channel-context.patch
+sed -i 's|/tmp/mac80211.orig|a/package/kernel/mac80211/Makefile|' patches/005-channel-context.patch
+sed -i 's|/tmp/mac80211|b/package/kernel/mac80211/Makefile|' patches/005-channel-context.patch
+ 
+# Apply (in Makefile patch target)
+patch -d $(OPENWRT_DIR) -p1 -N --forward < patches/005-channel-context.patch || true
 ```
 
 ## Build
