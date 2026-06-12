@@ -13,7 +13,7 @@ image:
 	docker build \
 		--build-arg UID=$(shell id -u) \
 		--build-arg GID=$(shell id -g) \
-		-t openwrt-hamnet:debian12 .
+		-t openwrt-hamnet:ubuntu22 .
 
 build: setup patch
 	docker run --rm -it \
@@ -21,7 +21,7 @@ build: setup patch
 		-v "$(OPENWRT_DIR)":/work/openwrt \
 		-v "$(CACHE_DIR)":/work/openwrt/dl \
 		-v "$(PATCHES_DIR)":/work/patches \
-		openwrt-hamnet:debian12 \
+		openwrt-hamnet:ubuntu22 \
 		bash -c "cd /work/openwrt && make -j$(shell nproc) V=s 2>&1 | tee /work/openwrt/build.log"
 
 setup:
@@ -53,11 +53,11 @@ config:
 	@cp $(CONFIG_SEED) $(OPENWRT_DIR)/.config
 	docker run --rm -it \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
-		openwrt-hamnet:debian12 \
+		openwrt-hamnet:ubuntu22 \
 		bash -c "cd /work/openwrt && make defconfig"
 
 clean:
 	docker run --rm \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
-		openwrt-hamnet:debian12 \
+		openwrt-hamnet:ubuntu22 \
 		bash -c "cd /work/openwrt && make clean"
