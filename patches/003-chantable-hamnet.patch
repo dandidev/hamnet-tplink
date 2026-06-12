@@ -1,6 +1,6 @@
---- a/drivers/net/wireless/ath/ath9k/common-init.c
-+++ b/drivers/net/wireless/ath/ath9k/common-init.c
-@@ -37,20 +37,40 @@
+--- a/drivers/net/wireless/ath/ath9k/common-init.c	2026-06-12 23:34:55.159892006 +0200
++++ b/drivers/net/wireless/ath/ath9k/common-init.c	2026-06-12 23:46:50.778256965 +0200
+@@ -37,20 +37,20 @@
   * we have calibration data for all cards though to make
   * this static */
  static const struct ieee80211_channel ath9k_2ghz_chantable[] = {
@@ -18,40 +18,20 @@
 -	CHAN2G(2467, 11), /* Channel 12 */
 -	CHAN2G(2472, 12), /* Channel 13 */
 -	CHAN2G(2484, 13), /* Channel 14 */
-+	CHAN2G(2312, 0),  /* HAMNET 13cm */
-+	CHAN2G(2317, 1),  /* HAMNET 13cm */
-+	CHAN2G(2322, 2),  /* HAMNET 13cm */
-+	CHAN2G(2327, 3),  /* HAMNET 13cm */
-+	CHAN2G(2332, 4),  /* HAMNET 13cm */
-+	CHAN2G(2337, 5),  /* HAMNET 13cm */
-+	CHAN2G(2342, 6),  /* HAMNET 13cm */
-+	CHAN2G(2347, 7),  /* HAMNET 13cm */
-+	CHAN2G(2352, 8),  /* HAMNET 13cm */
-+	CHAN2G(2357, 9),  /* HAMNET 13cm */
-+	CHAN2G(2362, 10), /* HAMNET 13cm */
-+	CHAN2G(2367, 11), /* HAMNET 13cm */
-+	CHAN2G(2372, 12), /* HAMNET 13cm */
-+	CHAN2G(2377, 13),  /* HAMNET 13cm */
-+	CHAN2G(2382, 14),  /* HAMNET 13cm */
-+	CHAN2G(2387, 15),  /* HAMNET 13cm */
-+	CHAN2G(2392, 16),  /* HAMNET 13cm */
-+	CHAN2G(2397, 17),  /* HAMNET 13cm, BFRK AP! */
-+	CHAN2G(2402, 18),  /* HAMNET 13cm */
-+	CHAN2G(2407, 19),  /* HAMNET 13cm */
-+	CHAN2G(2412, 20), /* Channel 1 */
-+	CHAN2G(2417, 21), /* Channel 2 */
-+	CHAN2G(2422, 22), /* Channel 3 */
-+	CHAN2G(2427, 23), /* Channel 4 */
-+	CHAN2G(2432, 24), /* Channel 5 */
-+	CHAN2G(2437, 25), /* Channel 6 */
-+	CHAN2G(2442, 26), /* Channel 7 */
-+	CHAN2G(2447, 27), /* Channel 8 */
-+	CHAN2G(2452, 28), /* Channel 9 */
-+	CHAN2G(2457, 29), /* Channel 10 */
-+	CHAN2G(2462, 30), /* Channel 11 */
-+	CHAN2G(2467, 31), /* Channel 12 */
-+	CHAN2G(2472, 32), /* Channel 13 */
-+	CHAN2G(2484, 33), /* Channel 14 */
++	CHAN2G(2312, 0),
++	CHAN2G(2317, 1),
++	CHAN2G(2322, 2),
++	CHAN2G(2327, 3),
++	CHAN2G(2332, 4),
++	CHAN2G(2337, 5),
++	CHAN2G(2342, 6),
++	CHAN2G(2347, 7),
++	CHAN2G(2352, 8),
++	CHAN2G(2357, 9),
++	CHAN2G(2362, 10),
++	CHAN2G(2367, 11),
++	CHAN2G(2372, 12),
++	CHAN2G(2377, 13),
  };
  
  /* Some 5 GHz radios are actually tunable on XXXX-YYYY

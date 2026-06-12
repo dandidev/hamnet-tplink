@@ -3,8 +3,9 @@ OPENWRT_DIR  := $(CURDIR)/openwrt
 CACHE_DIR    := /opt/ham/htchat/cache/dl
 PATCHES_DIR  := $(CURDIR)/patches
 OPENWRT_TAG  := v19.07.10
-#PROFILE      := tplink_tl-wr841-v11
-#PROFILE      := tplink_tl-wr841-v7
+# PROFILE      := tplink_tl-wr841-v9
+ PROFILE      := tplink_tl-wr841-v11
+# PROFILE      := tplink_tl-wr841-v7
 CONFIG_SEED  := $(CURDIR)/openwrt-$(PROFILE).config
 
 .PHONY: image build setup patch config clean
@@ -43,8 +44,6 @@ patch:
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/999-ath-hamnet-regd.patch
 	@cp $(PATCHES_DIR)/003-chantable-hamnet.patch \
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/997-ath-hamnet-chantable.patch
-	@cp $(PATCHES_DIR)/004-numchannels-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/996-ath-hamnet-numchannels.patch
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/005-channel-context.patch || true
 	@echo "Done!"
 
