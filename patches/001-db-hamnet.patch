@@ -4,7 +4,7 @@
  # This is the world regulatory domain
  country 00:
 +	# HAMNET 13cm band
-+	(2300 - 2400 @ 20), (20), NO-IR
++	(2300 - 2400 @ 20), (20)
  	(2402 - 2472 @ 40), (20)
  	# Channel 12 - 13.
  	(2457 - 2482 @ 20), (20), NO-IR, AUTO-BW

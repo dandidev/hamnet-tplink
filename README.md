@@ -104,8 +104,7 @@ cd openwrt/bin/targets/ath79/tiny/
 python3 -m http.server 8080
 
 # On the router
-wget http://<HOST_IP>:8080/openwrt-ath79-tiny-tplink_tl-wr841-v11-squashfs-sysupgrade.bin \
-    -O /tmp/sysupgrade.bin
+wget http://<HOST_IP>:8080/openwrt-ath79-tiny-tplink_tl-wr841-v11-squashfs-sysupgrade.bin -O /tmp/sysupgrade.bin
 sysupgrade -v /tmp/sysupgrade.bin
 ```
 

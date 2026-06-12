@@ -5,7 +5,7 @@
  #define ATH9K_2GHZ_CH01_11	REG_RULE(2412-10, 2462+10, 40, 0, 20, 0)
  
 +/* HAMNET 13cm band 2300-2400 MHz */
-+#define ATH9K_2GHZ_HAMNET       REG_RULE(2300-10, 2400+10, 20, 0, 20, NL80211_RRF_NO_IR)
++#define ATH9K_2GHZ_HAMNET       REG_RULE(2300-10, 2400+10, 20, 0, 20, 0)
 +
  /* We enable active scan on these a case by case basis by regulatory domain */
  #define ATH9K_2GHZ_CH12_13	REG_RULE(2467-10, 2472+10, 40, 0, 20,\

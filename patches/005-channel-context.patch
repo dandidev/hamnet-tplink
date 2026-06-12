@@ -1,0 +1,10 @@
+--- a/package/kernel/mac80211/Makefile
++++ b/package/kernel/mac80211/Makefile
+@@ -78,6 +78,7 @@
+ 	WLAN_VENDOR_ST \
+ 	WLAN_VENDOR_TI \
+ 	WLAN_VENDOR_ZYDAS \
++	ATH9K_CHANNEL_CONTEXT
+ 
+ config-$(call config_package,cfg80211) += CFG80211
+ 

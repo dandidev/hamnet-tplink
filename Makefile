@@ -1,9 +1,6 @@
 OPENWRT_DIR  := $(CURDIR)/openwrt
 CACHE_DIR    := /opt/ham/htchat/cache/dl
 PATCHES_DIR  := $(CURDIR)/patches
-TARGET       := ath79
-SUBTARGET    := tiny
-PROFILE      := tplink_tl-wr841-v11
 
 OPENWRT_TAG := v19.07.10
 CONFIG_SEED := $(CURDIR)/openwrt.config
@@ -18,7 +15,7 @@ image:
 
 build: setup patch
 	docker run --rm -it \
-		--network host
+		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
 		-v "$(CACHE_DIR)":/work/openwrt/dl \
 		-v "$(PATCHES_DIR)":/work/patches \
@@ -46,6 +43,7 @@ patch:
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/997-ath-hamnet-chantable.patch
 	@cp $(PATCHES_DIR)/004-numchannels-hamnet.patch \
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/996-ath-hamnet-numchannels.patch
+	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/005-channel-context.patch || true
 	@echo "Done!"
 
 config:
