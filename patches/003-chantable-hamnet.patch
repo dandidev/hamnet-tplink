@@ -1,5 +1,5 @@
---- a/drivers/net/wireless/ath/ath9k/common-init.c	2026-06-12 23:34:55.159892006 +0200
-+++ b/drivers/net/wireless/ath/ath9k/common-init.c	2026-06-12 23:46:50.778256965 +0200
+--- a/drivers/net/wireless/ath/ath9k/common-init.c
++++ b/drivers/net/wireless/ath/ath9k/common-init.c
 @@ -37,20 +37,20 @@
   * we have calibration data for all cards though to make
   * this static */
@@ -18,20 +18,20 @@
 -	CHAN2G(2467, 11), /* Channel 12 */
 -	CHAN2G(2472, 12), /* Channel 13 */
 -	CHAN2G(2484, 13), /* Channel 14 */
-+	CHAN2G(2312, 0),
-+	CHAN2G(2317, 1),
-+	CHAN2G(2322, 2),
-+	CHAN2G(2327, 3),
-+	CHAN2G(2332, 4),
-+	CHAN2G(2337, 5),
-+	CHAN2G(2342, 6),
-+	CHAN2G(2347, 7),
-+	CHAN2G(2352, 8),
-+	CHAN2G(2357, 9),
-+	CHAN2G(2362, 10),
-+	CHAN2G(2367, 11),
-+	CHAN2G(2372, 12),
-+	CHAN2G(2377, 13),
++	CHAN2G(2312, 1),
++	CHAN2G(2317, 2),
++	CHAN2G(2322, 3),
++	CHAN2G(2327, 4),
++	CHAN2G(2332, 5),
++	CHAN2G(2337, 6),
++	CHAN2G(2342, 7),
++	CHAN2G(2347, 8),
++	CHAN2G(2352, 9),
++	CHAN2G(2357, 10),
++	CHAN2G(2362, 11),
++	CHAN2G(2367, 12),
++	CHAN2G(2372, 13),
++	CHAN2G(2377, 14),
  };
  
  /* Some 5 GHz radios are actually tunable on XXXX-YYYY

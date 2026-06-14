@@ -1,0 +1,19 @@
+--- a/net/wireless/scan.c
++++ b/net/wireless/scan.c
+@@ -1091,6 +1091,16 @@
+ 		return channel;
+ 	}
+ 
++	/* HAMNET / quarter- and half-rate channels: the channel
++	 * number to frequency mapping is not unambiguous (the same
++	 * channel number maps to different frequencies than the
++	 * standard 2.4 GHz plan), so we cannot trust the DS Parameter
++	 * Set channel number. Rely on the driver-reported RX channel instead. */
++	if (scan_width == NL80211_BSS_CHAN_WIDTH_5 || 
++		scan_width == NL80211_BSS_CHAN_WIDTH_10) {
++			return channel;
++		}
++
+ 	freq = ieee80211_channel_to_frequency(channel_number, channel->band);
+ 	alt_channel = ieee80211_get_channel(wiphy, freq);
+ 	if (!alt_channel) {

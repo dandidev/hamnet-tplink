@@ -16,7 +16,7 @@ image:
 		--build-arg GID=$(shell id -g) \
 		-t openwrt-hamnet:ubuntu22 .
 
-build: setup patch
+build: config setup patch
 	docker run --rm -it \
 		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
@@ -44,7 +44,16 @@ patch:
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/999-ath-hamnet-regd.patch
 	@cp $(PATCHES_DIR)/003-chantable-hamnet.patch \
 		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/997-ath-hamnet-chantable.patch
+	@cp $(PATCHES_DIR)/006-common-hamnet-quarter.patch \
+		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/996-ath-hamnet-quarter.patch
+	@cp $(PATCHES_DIR)/009-scan-hamnet-channel.patch \
+		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/995-ath-hamnet-scan-channel.patch
+	@cp $(PATCHES_DIR)/004-hostapd-freq-to-chan.patch \
+		$(OPENWRT_DIR)/package/network/services/hostapd/patches/999-hostapd-freq-to-chan.patch
+	@cp $(PATCHES_DIR)/008-supplicant-hamnet-5mhz-connect.patch \
+		$(OPENWRT_DIR)/package/network/services/hostapd/patches/998-supplicant-hamnet-5mhz-connect.patch
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/005-channel-context.patch || true
+	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/007-mac80211-sta-freq.patch || true
 	@echo "Done!"
 
 config:
