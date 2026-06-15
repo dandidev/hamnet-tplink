@@ -60,9 +60,14 @@ config:
 	@echo "Copying config..."
 	@cp $(CONFIG_SEED) $(OPENWRT_DIR)/.config
 	docker run --rm -it \
+		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
 		openwrt-hamnet:ubuntu22 \
-		bash -c "cd /work/openwrt && make defconfig"
+		bash -c "cd /work/openwrt && \
+			[ -d feeds/packages ] || ./scripts/feeds update packages && \
+			./scripts/feeds install rp-pppoe && \
+			make defconfig"
+
 
 clean:
 	docker run --rm \
