@@ -32,6 +32,10 @@ Both devices have 4 MB flash and 32 MB RAM.
 # make image
 # make setup
 # make patch
+
+# Edit config - select cache dir and router type
+# cp .env.example .env
+
 make build
 ```
 

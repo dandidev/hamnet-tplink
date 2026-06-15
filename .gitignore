@@ -1,2 +1,3 @@
-cache/
+.dl-cache/
+.env
 openwrt/
