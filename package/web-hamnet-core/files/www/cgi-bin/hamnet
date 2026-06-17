@@ -1,0 +1,45 @@
+#!/bin/sh
+. /usr/lib/hamnet/lib.sh
+
+read_post
+action="$(query_get action)"
+
+case "$action" in
+	reboot)
+		# Reboot only on POST, so a stray GET cannot trigger it.
+		if [ "$REQUEST_METHOD" = "POST" ]; then
+			html_header "Reboot"
+			echo '<div class="card"><p>The router is rebooting. Try again in a minute.</p></div>'
+			html_footer
+			( sleep 1; reboot ) >/dev/null 2>&1 &
+		else
+			redirect '/cgi-bin/hamnet?action=system'
+		fi
+		;;
+	system)
+		html_header "System"
+		cat <<'PAGE'
+<div class="card">
+	<h2>System</h2>
+	<p>Reboot the router. The network will be briefly interrupted.</p>
+	<form method="post" action="/cgi-bin/hamnet?action=reboot"
+	      onsubmit="return confirm('Reboot the router now?');">
+		<button class="button-danger" type="submit">Reboot</button>
+	</form>
+</div>
+PAGE
+		html_footer
+		;;
+	*)
+		html_header "Home"
+		host="$(uci -q get system.@system[0].hostname || cat /proc/sys/kernel/hostname)"
+		cat <<PAGE
+<div class="card">
+	<h2>Welcome to the HAMNET control panel</h2>
+	<p>Device: <strong>$(printf '%s' "$host" | hesc)</strong></p>
+	<p>Choose a setting from the menu.</p>
+</div>
+PAGE
+		html_footer
+		;;
+esac

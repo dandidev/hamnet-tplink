@@ -123,6 +123,8 @@ Formula: `frequency = 2312 + (channel - 1) * 5`
 
 ### Client mode
 
+See [package/README.md](package/README.md) for the web UI
+
 The client connects to a HAMNET AP and authenticates via PPPoE using a callsign and password. This is the standard way to join the HAMNET network.
 
 **Step 1 — wireless:**

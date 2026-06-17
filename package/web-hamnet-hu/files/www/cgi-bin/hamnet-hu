@@ -1,0 +1,482 @@
+#!/bin/sh
+. /usr/lib/hamnet/lib.sh
+
+# -------------------------------------------------------------------------
+# Constants
+# -------------------------------------------------------------------------
+WLAN_DEV=wlan0
+# HAMNET 5 MHz channel plan: center frequencies (MHz). List index = channel number.
+HAM_FREQS="2312 2317 2322 2327 2332 2337 2342 2347 2352 2357 2362 2367 2372 2377"
+# Allowed channel widths (MHz). 5 is tested; 10 and 20 are experimental.
+HAM_BWS="5 10 20"
+
+# -------------------------------------------------------------------------
+# Validation (whitelist against the fixed tables)
+# -------------------------------------------------------------------------
+is_freq() { case " $HAM_FREQS " in *" $1 "*) return 0 ;; esac; return 1; }
+is_bw()   { case " $HAM_BWS "   in *" $1 "*) return 0 ;; esac; return 1; }
+
+# -------------------------------------------------------------------------
+# Small helpers
+# -------------------------------------------------------------------------
+oneline()    { printf '%s' "$1" | tr -d '\r\n'; }
+json_esc()   { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+associated() { iw dev "$WLAN_DEV" link 2>/dev/null | grep -q '^Connected to'; }
+
+# -------------------------------------------------------------------------
+# Live state sources
+# -------------------------------------------------------------------------
+# Width comes from UCI chanbw (the iw 'width' field is unreliable on this driver).
+current_bw() { uci -q get wireless.radio0.chanbw; }
+# Frequency comes live (in MHz) from 'iw link' (the channel index is meaningless here).
+current_freq() { iw dev "$WLAN_DEV" link 2>/dev/null | awk '/freq:/{print $2; exit}'; }
+
+# -------------------------------------------------------------------------
+# UI builders
+# -------------------------------------------------------------------------
+freq_options() {
+	# $1 = currently selected frequency in MHz
+	local cur="$1" ch=1 f sel
+	for f in $HAM_FREQS; do
+		[ "$f" = "$cur" ] && sel=' selected' || sel=''
+		printf '<option value="%s"%s>Ch %s — %s MHz</option>' "$f" "$sel" "$ch" "$f"
+		ch=$((ch + 1))
+	done
+}
+
+bw_options() {
+	# $1 = currently selected bandwidth in MHz
+	local cur="$1" b sel label
+	for b in $HAM_BWS; do
+		[ "$b" = "$cur" ] && sel=' selected' || sel=''
+		[ "$b" = 5 ] && label="5 MHz (tested)" || label="$b MHz (experimental)"
+		printf '<option value="%s"%s>%s</option>' "$b" "$sel" "$label"
+	done
+}
+
+step_indicator() {
+	# $1 = active step number (1/2/3)
+	local active="$1"
+	printf '<div class="wizard-steps">'
+	printf '<span class="wizard-step%s">1 · Scan</span>'  "$([ "$active" = 1 ] && echo ' is-active')"
+	printf '<span class="wizard-step%s">2 · Wi-Fi</span>' "$([ "$active" = 2 ] && echo ' is-active')"
+	printf '<span class="wizard-step%s">3 · PPPoE</span>' "$([ "$active" = 3 ] && echo ' is-active')"
+	printf '</div>'
+}
+
+# -------------------------------------------------------------------------
+# Scan parsing + dedup
+# -------------------------------------------------------------------------
+# Parse 'iw scan' output into tab-delimited rows: bssid \t freq \t signal \t ssid
+parse_scan() {
+	awk '
+		function flush() { if (bss != "") { printf "%s\t%s\t%s\t%s\n", bss, freq, sig, ssid } }
+		/^BSS /            { flush(); bss = $2; sub(/\(.*/, "", bss); freq = ""; sig = ""; ssid = "" }
+		/^[ \t]*freq:/     { f = $0; sub(/.*freq:[ \t]*/, "", f);  sub(/[^0-9].*/, "", f); freq = f }
+		/^[ \t]*signal:/   { s = $0; sub(/.*signal:[ \t]*/, "", s); sub(/ .*/, "", s);      sig  = s }
+		/^[ \t]*SSID:/     { s = $0; sub(/^[ \t]*SSID:[ \t]?/, "", s);                      ssid = s }
+		END                { flush() }
+	'
+}
+
+# Keep one row per BSSID (the strongest signal), sorted by signal descending.
+dedup_scan() {
+	awk -F'\t' '
+		{ if (!($1 in best) || $3 + 0 > best[$1] + 0) { best[$1] = $3; line[$1] = $0 } }
+		END { for (b in line) print line[b] }
+	' | sort -t"$(printf '\t')" -k3 -rn
+}
+
+# -------------------------------------------------------------------------
+# Status JSON endpoints (polled by the wizard / status-page JavaScript)
+# -------------------------------------------------------------------------
+wifi_status_json() {
+	local out assoc bssid ssid freq sig
+	out="$(iw dev "$WLAN_DEV" link 2>/dev/null)"
+	if printf '%s' "$out" | grep -q '^Connected to'; then
+		assoc=true
+		bssid="$(printf '%s' "$out" | awk '/^Connected to/{print $3; exit}')"
+		ssid="$(printf '%s'  "$out" | sed -n 's/^[ \t]*SSID:[ \t]*//p' | head -n1)"
+		freq="$(printf '%s'  "$out" | awk '/freq:/{print $2; exit}')"
+		sig="$(printf '%s'   "$out" | awk '/signal:/{print $2; exit}')"
+	else
+		assoc=false; bssid=""; ssid=""; freq=""; sig=""
+	fi
+	printf 'Content-Type: application/json\r\n\r\n'
+	printf '{"assoc":%s,"ssid":"%s","bssid":"%s","freq":"%s","signal":"%s"}' \
+		"$assoc" "$(json_esc "$ssid")" "$bssid" "$freq" "$sig"
+}
+
+pppoe_status_json() {
+	local status up proto addr
+	status="$(ubus call network.interface.wwan status 2>/dev/null)"
+	up="$(printf '%s'    "$status" | jsonfilter -e '@.up' 2>/dev/null)"
+	proto="$(printf '%s' "$status" | jsonfilter -e '@.proto' 2>/dev/null)"
+	addr="$(printf '%s'  "$status" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null)"
+	[ "$up" = true ] || up=false
+	printf 'Content-Type: application/json\r\n\r\n'
+	printf '{"up":%s,"proto":"%s","address":"%s"}' "$up" "$(json_esc "$proto")" "$(json_esc "$addr")"
+}
+
+# -------------------------------------------------------------------------
+# Step 1: Scan
+# -------------------------------------------------------------------------
+page_scan() {
+	# $1 = scan results (may be empty), $2 = selected freq, $3 = selected bw
+	results="$1"; sel_freq="$2"; sel_bw="$3"; TAB="$(printf '\t')"
+	html_header "HAMNET – Scan"
+	step_indicator 1
+	cat <<PAGE
+<div class="card">
+	<h2>1. Find a remote station</h2>
+	<form method="get" onsubmit="return confirm('Scanning retunes the radio and drops the current HAMNET link for the duration of the scan. Continue?');">
+		<input type="hidden" name="step" value="scan">
+		<input type="hidden" name="do" value="scan">
+		<label>Frequency</label>
+		<select name="freq">$(freq_options "$sel_freq")</select>
+		<label>Bandwidth</label>
+		<select name="bw">$(bw_options "$sel_bw")</select>
+		<button type="submit">Start scan</button>
+	</form>
+</div>
+PAGE
+	if [ "$DID_SCAN" = 1 ]; then
+		if [ -n "$results" ]; then
+			echo '<div class="card"><h2>Results</h2>'
+			printf '%s\n' "$results" | while IFS="$TAB" read -r bss freq sig ssid; do
+				[ -n "$bss" ] || continue
+				name="$ssid"; sig_int="${sig%.*}"
+				[ -n "$name" ] || name="(hidden)"
+				printf '<div class="scan-result"><div class="scan-result-info"><strong>%s</strong><span>%s MHz · %s dBm · %s</span></div>' \
+					"$(printf '%s' "$name" | hesc)" "$freq" "$sig_int" "$bss"
+				if [ -n "$ssid" ]; then
+					printf '<a class="button" href="?step=wifi&amp;ssid=%s&amp;freq=%s&amp;bw=%s">Use this &rarr;</a>' \
+						"$(urlencode "$ssid")" "$freq" "$sel_bw"
+				else
+					printf '<span class="text-muted">hidden SSID</span>'
+				fi
+				printf '</div>'
+			done
+			echo '</div>'
+		else
+			printf '<div class="card"><p>No networks found on this frequency and bandwidth. Try another, or enter the SSID manually in the next step.</p><a class="button" href="?step=wifi&amp;freq=%s&amp;bw=%s">Continue with manual SSID &rarr;</a></div>' \
+				"$sel_freq" "$sel_bw"
+		fi
+	fi
+	html_footer
+}
+
+# -------------------------------------------------------------------------
+# Step 2: Wi-Fi connect
+# -------------------------------------------------------------------------
+page_wifi() {
+	ssid="$(query_get ssid)"; freq="$(query_get freq)"; bw="$(query_get bw)"
+	html_header "HAMNET – Wi-Fi"
+	step_indicator 2
+	[ "$(query_get err)" = 1 ] && echo '<div class="alert alert-error">Missing or invalid data. Please enter the SSID.</div>'
+	cat <<PAGE
+<div class="card">
+	<h2>2. Connect</h2>
+	<p>Frequency: <strong>${freq:-—} MHz</strong> · Bandwidth: <strong>${bw:-—} MHz</strong></p>
+	<form method="post" action="?step=wifi&do=connect" onsubmit="return confirm('Connecting retunes the radio to this SSID and frequency, dropping the current link. Continue?');">
+		<input type="hidden" name="freq" value="$(printf '%s' "$freq" | hesc)">
+		<input type="hidden" name="bw" value="$(printf '%s' "$bw" | hesc)">
+		<label>SSID</label>
+		<input name="ssid" value="$(printf '%s' "$ssid" | hesc)" required>
+		<button type="submit">Connect</button>
+	</form>
+	<p class="text-muted" style="margin-top:12px"><a href="?step=scan">&larr; Back to scan</a></p>
+</div>
+PAGE
+	html_footer
+}
+
+page_wifi_connecting() {
+	ssid="$(query_get ssid)"; freq="$(query_get freq)"; bw="$(query_get bw)"
+	retry="?step=wifi&ssid=$(urlencode "$ssid")&freq=$freq&bw=$bw"
+	html_header "HAMNET – Connecting"
+	step_indicator 2
+	cat <<PAGE
+<div class="card">
+	<h2>Connecting to: $(printf '%s' "$ssid" | hesc)</h2>
+	<div id="status" class="text-muted">Connecting…</div>
+	<div id="next" style="margin-top:14px"></div>
+</div>
+<script>
+(function () {
+	var tries = 8;
+	function poll() {
+		fetch('?action=wifi_status').then(function (r) { return r.json(); }).then(function (j) {
+			var status = document.getElementById('status');
+			var next = document.getElementById('next');
+			if (j.assoc) {
+				status.className = 'alert alert-success';
+				status.textContent = 'Connected: ' + j.ssid + ' · ' + j.signal + ' dBm · ' + j.bssid;
+				next.innerHTML = '<a class="button" href="?step=pppoe">Continue to PPPoE &rarr;</a>';
+				return;
+			}
+			if (--tries > 0) {
+				setTimeout(poll, 2000);
+			} else {
+				status.className = 'alert alert-error';
+				status.textContent = 'Could not connect. Check the frequency and SSID.';
+				next.innerHTML = '<a class="button" href="$retry">Try again</a> <a href="?step=scan">New scan</a>';
+			}
+		}).catch(function () { if (--tries > 0) setTimeout(poll, 2000); });
+	}
+	poll();
+})();
+</script>
+PAGE
+	html_footer
+}
+
+do_connect() {
+	ssid="$(oneline "$(form_get ssid "$POST")")"
+	freq="$(form_get freq "$POST")"
+	bw="$(form_get bw "$POST")"
+	if [ -z "$ssid" ] || ! is_freq "$freq" || ! is_bw "$bw"; then
+		redirect "?step=wifi&err=1&ssid=$(urlencode "$ssid")&freq=$freq&bw=$bw"
+		return
+	fi
+	# Associate at L2 only (proto none) so we can verify the radio links before pppoe.
+	uci set wireless.radio0.chanbw="$bw"
+	uci set wireless.radio0.disabled='0'
+	uci set wireless.sta.mode='sta'
+	uci set wireless.sta.ssid="$ssid"
+	uci set wireless.sta.encryption='none'
+	uci set wireless.sta.network='wwan'
+	uci set wireless.sta.freq_list="$freq"
+	uci set network.wwan.proto='none'
+	uci commit wireless
+	uci commit network
+	( wifi reload; sleep 2; ifup wwan ) >/dev/null 2>&1 &
+	redirect "?step=wifi&connecting=1&ssid=$(urlencode "$ssid")&freq=$freq&bw=$bw"
+}
+
+# -------------------------------------------------------------------------
+# Step 3: PPPoE (gated on an active Wi-Fi association)
+# -------------------------------------------------------------------------
+page_pppoe() {
+	if ! associated; then
+		html_header "HAMNET – PPPoE"
+		step_indicator 3
+		echo '<div class="card"><h2>3. PPPoE</h2><div class="alert alert-error">No active Wi-Fi link. PPPoE runs over a connected HAMNET link — complete step 2 first.</div><a class="button" href="?step=scan">New scan (step 1)</a></div>'
+		html_footer
+		return
+	fi
+	user="$(uci -q get network.wwan.username)"
+	html_header "HAMNET – PPPoE"
+	step_indicator 3
+	[ "$(query_get err)" = 1 ] && echo '<div class="alert alert-error">Username is required.</div>'
+	cat <<PAGE
+<div class="card">
+	<h2>3. PPPoE login</h2>
+	<p>PPPoE is established over the currently connected HAMNET link.</p>
+	<form method="post" action="?step=pppoe&do=save">
+		<label>Username</label>
+		<input name="username" value="$(printf '%s' "$user" | hesc)" required>
+		<label>Password</label>
+		<input name="password" type="password" placeholder="(unchanged)">
+		<button type="submit">Connect</button>
+	</form>
+	<p class="text-muted" style="margin-top:12px"><a href="?step=wifi">&larr; Back to Wi-Fi</a></p>
+</div>
+PAGE
+	html_footer
+}
+
+page_pppoe_connecting() {
+	html_header "HAMNET – PPPoE"
+	step_indicator 3
+	cat <<PAGE
+<div class="card">
+	<h2>PPPoE connecting</h2>
+	<div id="status" class="text-muted">Dialing…</div>
+	<div id="next" style="margin-top:14px"></div>
+</div>
+<script>
+(function () {
+	var tries = 12;
+	function poll() {
+		fetch('?action=pppoe_status').then(function (r) { return r.json(); }).then(function (j) {
+			var status = document.getElementById('status');
+			var next = document.getElementById('next');
+			if (j.up && j.address) {
+				status.className = 'alert alert-success';
+				status.textContent = 'Connected · IP: ' + j.address;
+				next.innerHTML = '<a class="button" href="?step=status">Done &rarr; Status</a>';
+				return;
+			}
+			if (--tries > 0) {
+				setTimeout(poll, 2000);
+			} else {
+				status.className = 'alert alert-error';
+				status.textContent = 'PPPoE did not come up (timeout). Check the username and password.';
+				next.innerHTML = '<a class="button" href="?step=pppoe">Try again</a> <a href="?step=wifi">Back to Wi-Fi</a>';
+			}
+		}).catch(function () { if (--tries > 0) setTimeout(poll, 2000); });
+	}
+	poll();
+})();
+</script>
+PAGE
+	html_footer
+}
+
+do_pppoe_save() {
+	user="$(oneline "$(form_get username "$POST")")"
+	pass="$(oneline "$(form_get password "$POST")")"
+	if [ -z "$user" ]; then
+		redirect "?step=pppoe&err=1"
+		return
+	fi
+	uci set network.wwan.proto='pppoe'
+	uci set network.wwan.username="$user"
+	# Only overwrite the password when a new one was actually entered.
+	[ -n "$pass" ] && uci set network.wwan.password="$pass"
+	uci commit network
+	# Tear down and re-dial so the new credentials take effect.
+	( ifdown wwan; sleep 1; ifup wwan ) >/dev/null 2>&1 &
+	redirect "?step=pppoe&connecting=1"
+}
+
+# -------------------------------------------------------------------------
+# Status / edit page (the daily view; default for the HAMNET menu)
+# -------------------------------------------------------------------------
+page_status() {
+	html_header "HAMNET"
+	bw="$(current_bw)"
+	user="$(uci -q get network.wwan.username)"
+	[ "$(query_get saved)" = 1 ] && echo '<div class="alert alert-success">Saved. The link is rebuilding — the status updates in a few seconds.</div>'
+	[ "$(query_get err)" = 1 ]   && echo '<div class="alert alert-error">Username is required.</div>'
+	cat <<PAGE
+<div class="card">
+	<h2>HAMNET connection</h2>
+	<div class="status-row"><span class="status-label">Wi-Fi</span><span id="wifi-status" class="text-muted">…</span></div>
+	<div class="status-row"><span class="status-label">Bandwidth</span><span>${bw:-—} MHz</span></div>
+	<div class="status-row"><span class="status-label">PPPoE</span><span id="pppoe-status" class="text-muted">…</span></div>
+</div>
+<div class="card">
+	<h2>PPPoE credentials</h2>
+	<form method="post" action="?step=status&do=pppoe">
+		<label>Username</label>
+		<input name="username" value="$(printf '%s' "$user" | hesc)" required>
+		<label>Password</label>
+		<input name="password" type="password" placeholder="(unchanged)">
+		<button type="submit">Save &amp; redial</button>
+	</form>
+</div>
+<div class="card">
+	<h2>Reconfigure Wi-Fi</h2>
+	<p class="text-muted">Changing the SSID, frequency or bandwidth drops the link, so it is done from the wizard.</p>
+	<a class="button" href="?step=scan">Reconfigure with the wizard &rarr;</a>
+</div>
+<script>
+(function () {
+	function update() {
+		fetch('?action=wifi_status').then(function (r) { return r.json(); }).then(function (j) {
+			var el = document.getElementById('wifi-status');
+			if (j.assoc) {
+				el.className = 'status-up';
+				el.textContent = 'Connected: ' + j.ssid + ' · ' + j.signal + ' dBm · ' + j.freq + ' MHz · ' + j.bssid;
+			} else {
+				el.className = 'status-down';
+				el.textContent = 'Not connected';
+			}
+		}).catch(function () {});
+		fetch('?action=pppoe_status').then(function (r) { return r.json(); }).then(function (j) {
+			var el = document.getElementById('pppoe-status');
+			if (j.up && j.address) {
+				var tag = (j.address.indexOf('44.') === 0) ? ' (HAMNET)' : '';
+				el.className = 'status-up';
+				el.textContent = 'Up · IP: ' + j.address + tag;
+			} else {
+				el.className = 'status-down';
+				el.textContent = 'PPPoE down';
+			}
+		}).catch(function () {});
+	}
+	update();
+	setInterval(update, 5000);
+})();
+</script>
+PAGE
+	html_footer
+}
+
+do_pppoe_inline() {
+	user="$(oneline "$(form_get username "$POST")")"
+	pass="$(oneline "$(form_get password "$POST")")"
+	if [ -z "$user" ]; then
+		redirect "?step=status&err=1"
+		return
+	fi
+	uci set network.wwan.proto='pppoe'
+	uci set network.wwan.username="$user"
+	[ -n "$pass" ] && uci set network.wwan.password="$pass"
+	uci commit network
+	( ifdown wwan; sleep 1; ifup wwan ) >/dev/null 2>&1 &
+	redirect "?step=status&saved=1"
+}
+
+# -------------------------------------------------------------------------
+# Dispatch
+# -------------------------------------------------------------------------
+read_post
+
+case "$(query_get action)" in
+	wifi_status)  wifi_status_json;  exit 0 ;;
+	pppoe_status) pppoe_status_json; exit 0 ;;
+esac
+
+case "$(query_get step)" in
+	scan)
+		if [ "$(query_get do)" = scan ]; then
+			freq="$(query_get freq)"; bw="$(query_get bw)"
+			if is_freq "$freq" && is_bw "$bw"; then
+				uci set wireless.radio0.chanbw="$bw"
+				uci commit wireless
+				wifi reload >/dev/null 2>&1
+				sleep 4
+				results="$(iw dev "$WLAN_DEV" scan freq "$freq" 2>/dev/null | parse_scan | dedup_scan)"
+				DID_SCAN=1
+				page_scan "$results" "$freq" "$bw"
+			else
+				DID_SCAN=0
+				page_scan "" "$(current_freq)" "$(current_bw)"
+			fi
+		else
+			DID_SCAN=0
+			page_scan "" "$(current_freq)" "$(current_bw)"
+		fi
+		;;
+	wifi)
+		if [ "$(query_get do)" = connect ] && [ "$REQUEST_METHOD" = POST ]; then
+			do_connect
+		elif [ "$(query_get connecting)" = 1 ]; then
+			page_wifi_connecting
+		else
+			page_wifi
+		fi
+		;;
+	pppoe)
+		if [ "$(query_get do)" = save ] && [ "$REQUEST_METHOD" = POST ]; then
+			do_pppoe_save
+		elif [ "$(query_get connecting)" = 1 ]; then
+			page_pppoe_connecting
+		else
+			page_pppoe
+		fi
+		;;
+	status)
+		if [ "$(query_get do)" = pppoe ] && [ "$REQUEST_METHOD" = POST ]; then
+			do_pppoe_inline
+		else
+			page_status
+		fi
+		;;
+	*)
+		page_status
+		;;
+esac

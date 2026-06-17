@@ -3,6 +3,7 @@ export
 
 OPENWRT_DIR  := $(CURDIR)/openwrt
 PATCHES_DIR  := $(CURDIR)/patches
+PACKAGES_DIR := $(CURDIR)/package
 OPENWRT_TAG  := v19.07.10
 PROFILE      ?= tplink_tl-wr841-v11
 CACHE_DIR    ?= $(CURDIR)/.dl-cache
@@ -16,7 +17,7 @@ image:
 		--build-arg GID=$(shell id -g) \
 		-t openwrt-hamnet:ubuntu22 .
 
-build: config setup patch
+build: config patch
 	docker run --rm -it \
 		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
@@ -56,7 +57,15 @@ patch:
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/007-mac80211-sta-freq.patch || true
 	@echo "Done!"
 
-config:
+packages: setup
+	@echo "Installing custom packages..."
+	@test -d "$(OPENWRT_DIR)" || { echo "OpenWrt nincs klónozva — előbb 'make setup'"; exit 1; }
+	@rm -rf "$(OPENWRT_DIR)/package/web-hamnet-core" "$(OPENWRT_DIR)/package/web-hamnet-hu"
+	@cp -r "$(PACKAGES_DIR)/web-hamnet-core" "$(OPENWRT_DIR)/package/web-hamnet-core"
+	@cp -r "$(PACKAGES_DIR)/web-hamnet-hu"   "$(OPENWRT_DIR)/package/web-hamnet-hu"
+	@echo "Done!"
+
+config: packages
 	@echo "Copying config..."
 	@cp $(CONFIG_SEED) $(OPENWRT_DIR)/.config
 	docker run --rm -it \
