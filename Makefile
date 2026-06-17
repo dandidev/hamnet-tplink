@@ -4,12 +4,13 @@ export
 OPENWRT_DIR  := $(CURDIR)/openwrt
 PATCHES_DIR  := $(CURDIR)/patches
 PACKAGES_DIR := $(CURDIR)/package
+FILES_DIR    := $(CURDIR)/files
 OPENWRT_TAG  := v19.07.10
 PROFILE      ?= tplink_tl-wr841-v11
 CACHE_DIR    ?= $(CURDIR)/.dl-cache
 CONFIG_SEED  := $(CURDIR)/openwrt-$(PROFILE).config
 
-.PHONY: image build setup patch config clean
+.PHONY: image build setup patch config files clean
 
 image:
 	docker build \
@@ -17,7 +18,7 @@ image:
 		--build-arg GID=$(shell id -g) \
 		-t openwrt-hamnet:ubuntu22 .
 
-build: config patch
+build: config files patch
 	docker run --rm -it \
 		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
@@ -64,6 +65,11 @@ packages: setup
 	@cp -r "$(PACKAGES_DIR)/web-hamnet-core" "$(OPENWRT_DIR)/package/web-hamnet-core"
 	@cp -r "$(PACKAGES_DIR)/web-hamnet-hu"   "$(OPENWRT_DIR)/package/web-hamnet-hu"
 	@echo "Done!"
+
+files:
+	@echo "Staging overlay files..."
+	rm -rf $(OPENWRT_DIR)/files
+	cp -r $(FILES_DIR) $(OPENWRT_DIR)
 
 config: packages
 	@echo "Copying config..."

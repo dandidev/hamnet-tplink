@@ -130,22 +130,24 @@ The client connects to a HAMNET AP and authenticates via PPPoE using a callsign 
 **Step 1 — wireless:**
 
 ```sh
-uci set wireless.radio0.channel='auto'   # scan all HAMNET frequencies
-uci set wireless.radio0.chanbw='5'       # 5 MHz channel width, required by HAMNET
-uci set wireless.radio0.country='00'     # world regulatory domain, unlocks amateur bands
-uci set wireless.radio0.htmode='NOHT'    # no HT, compatible with 5 MHz quarter-channel mode
+# Radio — HAMNET 5 MHz quarter-channel, fixed channel
+uci set wireless.radio0.channel='11'       # 2362 MHz — set to the AP's channel (see table); channel = (MHz - 2312) / 5 + 1
+uci set wireless.radio0.chanbw='5'         # 5 MHz channel width, required by HAMNET
+uci set wireless.radio0.country='00'       # patched regdomain that unlocks the 2300-2400 band
+uci set wireless.radio0.htmode='NOHT'      # no HT, required for 5 MHz quarter-channel mode
 uci set wireless.radio0.disabled='0'
 
+# Remove the stock AP — one radio, one VAP, otherwise HOSTAPD_START_FAILED
+uci delete wireless.default_radio0
+
+# STA (client) connecting to the HAMNET AP
 uci set wireless.sta=wifi-iface
 uci set wireless.sta.device='radio0'
-uci set wireless.sta.mode='sta'          # station (client) mode
-uci set wireless.sta.ssid='HAMNET-DEMO'
-uci set wireless.sta.encryption='none'   # no encryption — required by amateur radio regulations
-uci set wireless.sta.network='wwan'      # bind to the wwan interface for PPPoE
-uci set wireless.sta.freq_list='2312 2317 2322 2327 2332 2337 2342 2347 2352 2357 2362 2367 2372 2377'
-
+uci set wireless.sta.mode='sta'            # station (client) mode
+uci set wireless.sta.ssid='HAMNET-DEMO'    # the AP's SSID
+uci set wireless.sta.encryption='none'     # no encryption, required by amateur radio regulations
+uci set wireless.sta.network='wwan'        # PPPoE will run on top of this interface
 uci commit wireless
-wifi
 ```
 
 **Step 2 — PPPoE interface:**
@@ -153,12 +155,15 @@ wifi
 Authentication uses CHAP with your callsign as the username. The connection is established over the wireless L2 link — PPPoE runs directly on top of the radio, no IP is needed underneath it.
 
 ```sh
+# PPPoE on the STA's logical network (NO device/ifname line!)
 uci set network.wwan=interface
-uci set network.wwan.device='wlan0'
-uci set network.wwan.proto='pppoe'              # PPPoE over wireless L2
-uci set network.wwan.username='<your callsign>'
-uci set network.wwan.password='<password from hamnetradio.hu/portal>'
+uci set network.wwan.proto='pppoe'
+uci set network.wwan.username='YOUR_REAL_USERNAME'
+uci set network.wwan.password='YOUR_REAL_PASSWORD'
+uci set network.wwan.ipv6='0'
 uci commit network
+
+wifi
 /etc/init.d/network restart
 ```
 
