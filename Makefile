@@ -3,12 +3,13 @@ export
 
 OPENWRT_DIR  := $(CURDIR)/openwrt
 PATCHES_DIR  := $(CURDIR)/patches
+FILES_DIR    := $(CURDIR)/files
 OPENWRT_TAG  := v19.07.10
 PROFILE      ?= tplink_tl-wr841-v11
 CACHE_DIR    ?= $(CURDIR)/.dl-cache
 CONFIG_SEED  := $(CURDIR)/openwrt-$(PROFILE).config
 
-.PHONY: image build setup patch config clean
+.PHONY: image build setup patch config files clean
 
 image:
 	docker build \
@@ -16,7 +17,7 @@ image:
 		--build-arg GID=$(shell id -g) \
 		-t openwrt-hamnet:ubuntu22 .
 
-build: config setup patch
+build: config files setup patch
 	docker run --rm -it \
 		--network host \
 		-v "$(OPENWRT_DIR)":/work/openwrt \
@@ -55,6 +56,11 @@ patch:
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/005-channel-context.patch || true
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/007-mac80211-sta-freq.patch || true
 	@echo "Done!"
+
+files:
+	@echo "Staging overlay files..."
+	rm -rf $(OPENWRT_DIR)/files
+	cp -r $(FILES_DIR) $(OPENWRT_DIR)
 
 config:
 	@echo "Copying config..."
