@@ -148,6 +148,8 @@ uci set wireless.sta.ssid='HAMNET-DEMO'    # the AP's SSID
 uci set wireless.sta.encryption='none'     # no encryption, required by amateur radio regulations
 uci set wireless.sta.network='wwan'        # PPPoE will run on top of this interface
 uci commit wireless
+
+wifi
 ```
 
 **Step 2 — PPPoE interface:**
@@ -163,8 +165,8 @@ uci set network.wwan.password='YOUR_REAL_PASSWORD'
 uci set network.wwan.ipv6='0'
 uci commit network
 
-wifi
-/etc/init.d/network restart
+ubus call network reload
+ifup wwan
 ```
 
 **Verify the connection:**
