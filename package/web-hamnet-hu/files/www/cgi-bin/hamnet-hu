@@ -22,6 +22,29 @@ is_bw()   { case " $HAM_BWS "   in *" $1 "*) return 0 ;; esac; return 1; }
 oneline()    { printf '%s' "$1" | tr -d '\r\n'; }
 json_esc()   { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 associated() { iw dev "$WLAN_DEV" link 2>/dev/null | grep -q '^Connected to'; }
+# Convert a HAMNET center frequency (MHz) to its channel number (index in HAM_FREQS).
+freq_to_channel() { echo $(( ($1 - 2312) / 5 + 1 )); }
+
+# Apply the HAMNET radio + STA config. Declares the sections (uci set X=type)
+# so it works even on a clean config, mirroring the proven manual sequence.
+# Args: <freq MHz> <bw MHz> [ssid]
+apply_radio() {
+	local freq="$1" bw="$2" ssid="$3" channel
+	channel="$(freq_to_channel "$freq")"
+	uci -q delete wireless.default_radio0
+	uci set wireless.radio0.channel="$channel"
+	uci set wireless.radio0.chanbw="$bw"
+	uci set wireless.radio0.country='00'
+	uci set wireless.radio0.htmode='NOHT'
+	uci set wireless.radio0.disabled='0'
+	uci set wireless.sta=wifi-iface
+	uci set wireless.sta.device='radio0'
+	uci set wireless.sta.mode='sta'
+	uci set wireless.sta.encryption='none'
+	uci set wireless.sta.network='wwan'
+	[ -n "$ssid" ] && uci set wireless.sta.ssid="$ssid"
+	uci commit wireless
+}
 
 # -------------------------------------------------------------------------
 # Live state sources
@@ -239,18 +262,10 @@ do_connect() {
 		redirect "?step=wifi&err=1&ssid=$(urlencode "$ssid")&freq=$freq&bw=$bw"
 		return
 	fi
-	# Associate at L2 only (proto none) so we can verify the radio links before pppoe.
-	uci set wireless.radio0.chanbw="$bw"
-	uci set wireless.radio0.disabled='0'
-	uci set wireless.sta.mode='sta'
-	uci set wireless.sta.ssid="$ssid"
-	uci set wireless.sta.encryption='none'
-	uci set wireless.sta.network='wwan'
-	uci set wireless.sta.freq_list="$freq"
-	uci set network.wwan.proto='none'
-	uci commit wireless
-	uci commit network
-	( wifi reload; sleep 2; ifup wwan ) >/dev/null 2>&1 &
+	# Build the wireless config from scratch and bring the radio up. Association
+	# happens at L2 here; the PPPoE interface (network.wwan) is built in step 3.
+	apply_radio "$freq" "$bw" "$ssid"
+	( wifi; sleep 3 ) >/dev/null 2>&1 &
 	redirect "?step=wifi&connecting=1&ssid=$(urlencode "$ssid")&freq=$freq&bw=$bw"
 }
 
@@ -277,7 +292,7 @@ page_pppoe() {
 		<label>Username</label>
 		<input name="username" value="$(printf '%s' "$user" | hesc)" required>
 		<label>Password</label>
-		<input name="password" type="password" placeholder="(unchanged)">
+		<input name="password" type="password" placeholder="PPPoE password" required>
 		<button type="submit">Connect</button>
 	</form>
 	<p class="text-muted" style="margin-top:12px"><a href="?step=wifi">&larr; Back to Wi-Fi</a></p>
@@ -327,17 +342,24 @@ PAGE
 do_pppoe_save() {
 	user="$(oneline "$(form_get username "$POST")")"
 	pass="$(oneline "$(form_get password "$POST")")"
-	if [ -z "$user" ]; then
+	# Wizard = fresh setup from zero: both username and password are required.
+	if [ -z "$user" ] || [ -z "$pass" ]; then
 		redirect "?step=pppoe&err=1"
 		return
 	fi
+	# Rebuild the wwan interface from scratch: PPPoE over the wireless L2 device.
+	uci -q delete network.wwan
+	uci set network.wwan=interface
+	uci set network.wwan.device='wlan0'
 	uci set network.wwan.proto='pppoe'
+	uci set network.wwan.ipv6='0'
 	uci set network.wwan.username="$user"
-	# Only overwrite the password when a new one was actually entered.
-	[ -n "$pass" ] && uci set network.wwan.password="$pass"
+	uci set network.wwan.password="$pass"
 	uci commit network
-	# Tear down and re-dial so the new credentials take effect.
-	( ifdown wwan; sleep 1; ifup wwan ) >/dev/null 2>&1 &
+	# Only bring up wwan; do NOT reload the whole network (that would re-create
+	# wlan0 and tear down the association the pppoe link rides on). 'ubus network
+	# reload' just makes netifd aware of the new section; 'ifup wwan' dials it.
+	( ubus call network reload; ifup wwan ) >/dev/null 2>&1 &
 	redirect "?step=pppoe&connecting=1"
 }
 
@@ -412,7 +434,11 @@ do_pppoe_inline() {
 		redirect "?step=status&err=1"
 		return
 	fi
+	# In-place edit: keep existing options, only overwrite the password if entered.
+	uci set network.wwan=interface
+	uci set network.wwan.device='wlan0'
 	uci set network.wwan.proto='pppoe'
+	uci set network.wwan.ipv6='0'
 	uci set network.wwan.username="$user"
 	[ -n "$pass" ] && uci set network.wwan.password="$pass"
 	uci commit network
@@ -435,9 +461,10 @@ case "$(query_get step)" in
 		if [ "$(query_get do)" = scan ]; then
 			freq="$(query_get freq)"; bw="$(query_get bw)"
 			if is_freq "$freq" && is_bw "$bw"; then
-				uci set wireless.radio0.chanbw="$bw"
-				uci commit wireless
-				wifi reload >/dev/null 2>&1
+				# Put the radio on the target channel/width (declares sections) so the
+				# scan can actually hear a 5 MHz station, then bring the radio up.
+				apply_radio "$freq" "$bw"
+				wifi >/dev/null 2>&1
 				sleep 4
 				results="$(iw dev "$WLAN_DEV" scan freq "$freq" 2>/dev/null | parse_scan | dedup_scan)"
 				DID_SCAN=1

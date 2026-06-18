@@ -1,7 +1,12 @@
 #!/bin/sh
 # Configure uhttpd for the HAMNET web UI:
 #   - HTTP Basic Auth on the CGI and app paths (reuses the root password)
-#   - bind the web server to the LAN address only (see topology note)
+#
+# We intentionally keep uhttpd's default listen (0.0.0.0:80). Binding to the
+# LAN IP only is fragile at boot: uhttpd (S50) may start before br-lan has its
+# address, so bind() fails and the service never comes up (it only works on a
+# manual start later). The wan-zone firewall (input DROP on wwan) already keeps
+# the HAMNET side out, and HTTP Basic Auth (root password) is the real guard.
 
 HTTPD_CONF=/etc/httpd.conf
 
@@ -14,15 +19,8 @@ add_auth '/hamnet:root:$p$root'
 
 if uci -q get uhttpd.main >/dev/null; then
 	uci set uhttpd.main.config='/etc/httpd.conf'
-
-	lan_ip="$(uci -q get network.lan.ipaddr)"
-	if [ -n "$lan_ip" ]; then
-		uci -q delete uhttpd.main.listen_http
-		uci -q delete uhttpd.main.listen_https
-		uci add_list uhttpd.main.listen_http="$lan_ip:80"
-	fi
-
 	uci commit uhttpd
+	/etc/init.d/uhttpd enable
 	/etc/init.d/uhttpd restart
 fi
 
