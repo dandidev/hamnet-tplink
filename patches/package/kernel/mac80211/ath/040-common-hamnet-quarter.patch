@@ -1,0 +1,22 @@
+--- a/drivers/net/wireless/ath/ath9k/common.c
++++ b/drivers/net/wireless/ath/ath9k/common.c
+@@ -345,6 +345,19 @@ static void ath9k_cmn_update_ichannel(st
+ 		WARN_ON(1);
+ 	}
+ 
++	/* Force HAMNET 13cm band (2312-2407 MHz) to the configured narrow bandwidth */
++	if (ichan->channel >= 2312 && ichan->channel <= 2407) {
++		if (common->chan_bw == 5)
++			flags |= CHANNEL_QUARTER;
++		else if (common->chan_bw == 10)
++			flags |= CHANNEL_HALF;
++		chandef->width = width;   /* reflect configured bw (5/10 MHz) to userspace */
++
++		printk(KERN_DEBUG
++			"ath9k: HAMNET: freq=%d MHz chan_bw=%d width_enum=%d flags=0x%04x band=%d\n",
++			ichan->channel, common->chan_bw, width, flags, chan->band);
++	}
++
+ 	ichan->channelFlags = flags;
+ }
+ 

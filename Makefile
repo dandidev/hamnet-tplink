@@ -9,7 +9,19 @@ PROFILE      ?= tplink_tl-wr841-v11
 CACHE_DIR    ?= $(CURDIR)/.dl-cache
 CONFIG_SEED  := $(CURDIR)/openwrt-$(PROFILE).config
 
-.PHONY: image build setup patch config files clean
+PKG_PATCHES := \
+  package/firmware/wireless-regdb/001-db-hamnet.patch:package/firmware/wireless-regdb/patches/001-db-hamnet.patch \
+  package/kernel/mac80211/ath/010-regd-hamnet.patch:package/kernel/mac80211/patches/ath/991-ath-hamnet-regd.patch \
+  package/kernel/mac80211/ath/020-ath-num-channels.patch:package/kernel/mac80211/patches/ath/992-ath-num-channels.patch \
+  package/kernel/mac80211/ath/030-chantable-hamnet.patch:package/kernel/mac80211/patches/ath/993-ath-hamnet-chantable.patch \
+  package/kernel/mac80211/ath/035-util-hamnet-chan-map.patch:package/kernel/mac80211/patches/ath/994-util-hamnet-chan-map.patch \
+  package/kernel/mac80211/ath/040-common-hamnet-quarter.patch:package/kernel/mac80211/patches/ath/995-ath-hamnet-quarter.patch \
+  package/kernel/mac80211/ath/050-scan-hamnet-channel.patch:package/kernel/mac80211/patches/ath/996-ath-hamnet-scan-channel.patch \
+  package/network/services/hostapd/010-hostapd-freq-range-expansion.patch:package/network/services/hostapd/patches/991-hostapd-freq-to-chan.patch \
+  package/network/services/hostapd/020-supplicant-hamnet-5mhz-connect.patch:package/network/services/hostapd/patches/992-supplicant-hamnet-5mhz-connect.patch \
+  package/network/utils/iw/010-iw-hamnet-chan-map.patch:package/network/utils/iw/patches/991-iw-hamnet-chan-map.patch
+
+.PHONY: image build setup patch clean-patches config files shell clean
 
 image:
 	docker build \
@@ -38,23 +50,26 @@ setup:
 	fi
 
 patch:
+	@echo "Forcing rebuild of patched packages..."
+	rm -rf $(OPENWRT_DIR)/build_dir/target-*/linux-*/backports-* 2>/dev/null || true
+	rm -rf $(OPENWRT_DIR)/build_dir/*/hostapd-* 2>/dev/null || true
+	rm -rf $(OPENWRT_DIR)/build_dir/*/wireless-regdb-* 2>/dev/null || true
 	@echo "Applying HAMNET patches..."
-	@cp $(PATCHES_DIR)/package/firmware/wireless-regdb/001-db-hamnet.patch \
-		$(OPENWRT_DIR)/package/firmware/wireless-regdb/patches/001-db-hamnet.patch
-	@cp $(PATCHES_DIR)/package/kernel/mac80211/ath/002-regd-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/999-ath-hamnet-regd.patch
-	@cp $(PATCHES_DIR)/package/kernel/mac80211/ath/003-chantable-hamnet.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/997-ath-hamnet-chantable.patch
-	@cp $(PATCHES_DIR)/package/kernel/mac80211/ath/006-common-hamnet-quarter.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/996-ath-hamnet-quarter.patch
-	@cp $(PATCHES_DIR)/package/kernel/mac80211/ath/009-scan-hamnet-channel.patch \
-		$(OPENWRT_DIR)/package/kernel/mac80211/patches/ath/995-ath-hamnet-scan-channel.patch
-	@cp $(PATCHES_DIR)/package/network/services/hostapd/004-hostapd-freq-to-chan.patch \
-		$(OPENWRT_DIR)/package/network/services/hostapd/patches/999-hostapd-freq-to-chan.patch
-	@cp $(PATCHES_DIR)/package/network/services/hostapd/008-supplicant-hamnet-5mhz-connect.patch \
-		$(OPENWRT_DIR)/package/network/services/hostapd/patches/998-supplicant-hamnet-5mhz-connect.patch
+	@for pair in $(PKG_PATCHES); do \
+		src="$(PATCHES_DIR)/$${pair%%:*}"; \
+		dst="$(OPENWRT_DIR)/$${pair##*:}"; \
+		cp "$$src" "$$dst"; \
+	done
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/005-channel-context.patch || true
 	@patch -d $(OPENWRT_DIR) -p1 -N --forward < $(PATCHES_DIR)/007-mac80211-sta-freq.patch || true
+	@echo "Done!"
+
+clean-patches:
+	@echo "Removing copied HAMNET patches..."
+	@for pair in $(PKG_PATCHES); do \
+		dst="$(OPENWRT_DIR)/$${pair##*:}"; \
+		rm -f "$$dst"; \
+	done
 	@echo "Done!"
 
 files:
@@ -74,6 +89,14 @@ config:
 			./scripts/feeds install rp-pppoe && \
 			make defconfig"
 
+shell:
+	docker run --rm -it \
+		--network host \
+		-v "$(OPENWRT_DIR)":/work/openwrt \
+		-v "$(CACHE_DIR)":/work/openwrt/dl \
+		-v "$(PATCHES_DIR)":/work/patches \
+		openwrt-hamnet:ubuntu22 \
+		bash
 
 clean:
 	docker run --rm \

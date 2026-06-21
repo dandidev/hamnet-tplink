@@ -1,0 +1,6 @@
+010-regd-hamnet.patch
+020-ath-num-channels.patch
+030-chantable-hamnet.patch
+035-util-hamnet-chan-map.patch
+040-common-hamnet-quarter.patch
+050-scan-hamnet-channel.patch

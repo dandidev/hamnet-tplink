@@ -1,0 +1,22 @@
+--- a/util.c
++++ b/util.c
+@@ -309,6 +309,9 @@ int ieee80211_channel_to_frequency(int c
+ 	case NL80211_BAND_2GHZ:
+ 		if (chan == 14)
+ 			return 2484;
++		/* HAMNET 13cm band: channels 100..119 -> 2312..2407 MHz */
++		else if (chan >= 100 && chan <= 119)
++			return 2312 + (chan - 100) * 5;
+ 		else if (chan < 14)
+ 			return 2407 + chan * 5;
+ 		break;
+@@ -333,6 +336,9 @@ int ieee80211_frequency_to_channel(int f
+ 	/* see 802.11-2007 17.3.8.3.2 and Annex J */
+ 	if (freq == 2484)
+ 		return 14;
++	/* HAMNET 13cm band: separate positive range 100..119 (u8-safe) */
++	else if (freq >= 2312 && freq <= 2407)
++		return (freq - 2312) / 5 + 100;
+ 	else if (freq < 2484)
+ 		return (freq - 2407) / 5;
+ 	else if (freq >= 4910 && freq <= 4980)
