@@ -1,10 +1,10 @@
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -5530,6 +5530,15 @@
+@@ -5530,6 +5530,15 @@ static int nl80211_connect_common(struct
  		if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ,
  				params->freq.freq))
  			return -1;
-+		if (params->freq.freq >= 2312 && params->freq.freq <= 2377) {
++		if (params->freq.freq >= 2312 && params->freq.freq <= 2407) {
 +			wpa_printf(MSG_INFO,
 +				   "  * HAMNET: using 5 MHz channel width");
 +			if (nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH,

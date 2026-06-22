@@ -1,0 +1,105 @@
+--- a/drivers/net/wireless/ath/regd.c
++++ b/drivers/net/wireless/ath/regd.c
+@@ -34,27 +34,28 @@ static struct reg_dmn_pair_mapping *ath_
+  */
+ 
+ /* Only these channels all allow active scan on all world regulatory domains */
+-#define ATH9K_2GHZ_CH01_11	REG_RULE(2412-10, 2462+10, 40, 0, 20, 0)
++#define ATH9K_2GHZ_CH01_11 REG_RULE(2412-10, 2462+10, 40, 0, 20, 0)
+ 
+ /* We enable active scan on these a case by case basis by regulatory domain */
+-#define ATH9K_2GHZ_CH12_13	REG_RULE(2467-10, 2472+10, 40, 0, 20,\
+-					 NL80211_RRF_NO_IR)
+-#define ATH9K_2GHZ_CH14		REG_RULE(2484-10, 2484+10, 40, 0, 20,\
+-					 NL80211_RRF_NO_IR | \
+-					 NL80211_RRF_NO_OFDM)
++#define ATH9K_2GHZ_CH12_13  REG_RULE(2467-10, 2472+10, 40, 0, 20,\
++                 NL80211_RRF_NO_IR)
++#define ATH9K_2GHZ_CH14    REG_RULE(2484-10, 2484+10, 40, 0, 20,\
++                 NL80211_RRF_NO_IR | \
++                 NL80211_RRF_NO_OFDM)
+ 
+ /* We allow IBSS on these on a case by case basis by regulatory domain */
+-#define ATH9K_5GHZ_5150_5350	REG_RULE(5150-10, 5240+10, 80, 0, 30, 0),\
+-				REG_RULE(5260-10, 5350+10, 80, 0, 30,\
+-					 NL80211_RRF_NO_IR)
+-#define ATH9K_5GHZ_5470_5850	REG_RULE(5470-10, 5850+10, 80, 0, 30,\
+-					 NL80211_RRF_NO_IR)
+-#define ATH9K_5GHZ_5725_5850	REG_RULE(5725-10, 5850+10, 80, 0, 30,\
+-					 NL80211_RRF_NO_IR)
+-
+-#define ATH9K_2GHZ_ALL		ATH9K_2GHZ_CH01_11, \
+-				ATH9K_2GHZ_CH12_13, \
+-				ATH9K_2GHZ_CH14
++#define ATH9K_5GHZ_5150_5350    REG_RULE(5150-10, 5240+10, 80, 0, 30, 0),\
++             REG_RULE(5260-10, 5350+10, 80, 0, 30,\
++                 NL80211_RRF_NO_IR)
++#define ATH9K_5GHZ_5470_5850    REG_RULE(5470-10, 5850+10, 80, 0, 30,\
++                 NL80211_RRF_NO_IR)
++#define ATH9K_5GHZ_5725_5850    REG_RULE(5725-10, 5850+10, 80, 0, 30,\
++                 NL80211_RRF_NO_IR)
++
++/* HAMNET 13cm + standard 2.4 GHz: full band open, all widths */
++#define ATH9K_2GHZ_HAMNET_ALL   REG_RULE(2290, 2510, 40, 0, 20, 0)
++
++#define ATH9K_2GHZ_ALL     ATH9K_2GHZ_HAMNET_ALL
+ 
+ #define ATH9K_5GHZ_ALL		ATH9K_5GHZ_5150_5350, \
+ 				ATH9K_5GHZ_5470_5850
+@@ -240,6 +241,7 @@ ieee80211_regdomain *ath_world_regdomain
+ 	case 0x60:
+ 	case 0x61:
+ 	case 0x62:
++		printk(KERN_DEBUG "ath: HAMNET: regdom_60_61_62 selected!\n");
+ 		return &ath_world_regdom_60_61_62;
+ 	case 0x63:
+ 	case 0x65:
+@@ -663,7 +665,7 @@ ath_regd_init_wiphy(struct ath_regulator
+ 
+ 	wiphy->reg_notifier = reg_notifier;
+ 
+-	if (IS_ENABLED(CPTCFG_ATH_USER_REGD))
++	if (IS_ENABLED(CPTCFG_ATH_USER_REGD) && !ath_is_world_regd(reg))
+ 		return 0;
+ 
+ 	if (is_default_regd(reg))
+@@ -729,15 +731,19 @@ static int __ath_regd_init(struct ath_re
+ 	regdmn = ath_regd_get_eepromRD(reg);
+ 	reg->country_code = ath_regd_get_default_country(regdmn);
+ 
+-	if (reg->country_code == CTRY_DEFAULT &&
++	/*if (reg->country_code == CTRY_DEFAULT &&
+ 	    regdmn == CTRY_DEFAULT) {
+ 		printk(KERN_DEBUG "ath: EEPROM indicates default "
+ 		       "country code should be used\n");
+ 		reg->country_code = CTRY_UNITED_STATES;
+-	}
++	}*/
+ 
+ 	if (reg->country_code == CTRY_DEFAULT) {
+ 		country = NULL;
++		reg->current_rd = WOR0_WORLD;   /* 0x60 - HAMNET world domain */
++    	regdmn = WOR0_WORLD;            /* 0x60 - regpair found in table */
++		printk(KERN_DEBUG "ath: HAMNET: forcing WOR0_WORLD, current_rd=0x%0x regdmn=0x%0x\n",
++		       reg->current_rd, regdmn);
+ 	} else {
+ 		printk(KERN_DEBUG "ath: doing EEPROM country->regdmn "
+ 		       "map search\n");
+@@ -758,6 +764,9 @@ static int __ath_regd_init(struct ath_re
+ 
+ 	reg->regpair = ath_get_regpair(regdmn);
+ 
++	printk(KERN_DEBUG "ath: HAMNET: is_world_regd=%d regpair=0x%0x\n",
++	       ath_is_world_regd(reg), reg->regpair->reg_domain);
++
+ 	if (!reg->regpair) {
+ 		printk(KERN_DEBUG "ath: "
+ 			"No regulatory domain pair found, cannot continue\n");
+@@ -798,6 +807,7 @@ ath_regd_init(struct ath_regulatory *reg
+ 		return r;
+ 
+ 	if (ath_is_world_regd(reg))
++		printk(KERN_DEBUG "ath: HAMNET: WORLD regd path taken\n");
+ 		memcpy(&common->reg_world_copy, reg,
+ 		       sizeof(struct ath_regulatory));
+ 
